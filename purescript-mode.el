@@ -36,6 +36,11 @@
 (make-variable-buffer-local 'purescript-literate)
 (put 'purescript-literate 'safe-local-variable 'symbolp)
 
+(defcustom purescript-mode-hook nil
+  "Hook run after entering `purescript-mode'."
+  :type 'hook
+  :group 'purescript)
+
 (define-derived-mode purescript-mode prog-mode "PureScript"
   "Major mode for PureScript
      \\{purescript-mode-map}
