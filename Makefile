@@ -21,6 +21,9 @@ all: compile
 
 compile: $(OBJS)
 
+package: Cask
+	$(CASK) package
+
 clean:
 	$(RM) $(OBJS)
 
