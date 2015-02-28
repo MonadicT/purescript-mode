@@ -1,34 +1,22 @@
 CASK  ?= cask
 EMACS ?= emacs
 
-EMACSFLAGS =
-EMACSBATCH = $(EMACS) --batch -Q -L . $(EMACSFLAGS)
-
 export EMACS
 
 PKGDIR := $(shell EMACS=$(EMACS) $(CASK) package-directory)
 
-SRCS = inf-purescript.el        \
-	purescript.el           \
-	purescript-mode.el      \
-	purescript-font-lock.el
+.PHONY: all build clean
 
-OBJS = $(SRCS:.el=.elc)
+all: build
 
-.PHONY: all compile clean
-
-all: compile
-
-compile: $(OBJS)
+build: Cask
+	$(CASK) build
 
 package: Cask
 	$(CASK) package
 
 clean:
-	$(RM) $(OBJS)
-
-%.elc: %.el $(PKGDIR)
-	$(CASK) exec $(EMACSBATCH) -f batch-byte-compile $<
+	$(CASK) clean-elc
 
 $(PKGDIR): Cask
 	$(CASK) install
