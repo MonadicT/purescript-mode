@@ -23,14 +23,6 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-;;; Commentary:
-
-;; fontification support of PureScript
-
-;;; Change Log:
-
-;; Version 0.1:
-;;   Brought over from haskell-mode v13.10
 
 ;;; Code:
 
@@ -40,70 +32,50 @@
 
 (defcustom purescript-font-lock-symbols nil
   "Display \\ and -> and such using symbols in fonts.
+
 This may sound like a neat trick, but be extra careful: it changes the
-alignment and can thus lead to nasty surprises w.r.t layout.
-If t, try to use whichever font is available.  Otherwise you can
-set it to a particular font of your preference among `japanese-jisx0208'
-and `unicode'."
+alignment and can thus lead to nasty surprises w.r.t layout."
   :group 'purescript
-  :type '(choice (const nil)
-                 (const t)
-                 (const unicode)
-                 (const japanese-jisx0208)))
+  :type 'boolean)
 
 (defconst purescript-font-lock-symbols-alist
-  (append
-   ;; Prefer single-width Unicode font for lambda.
-   (and (fboundp 'decode-char)
-        (memq purescript-font-lock-symbols '(t unicode))
-        (list (cons "\\" (decode-char 'ucs 955))))
-   ;; The symbols can come from a JIS0208 font.
-   (and (fboundp 'make-char) (fboundp 'charsetp) (charsetp 'japanese-jisx0208)
-        (memq purescript-font-lock-symbols '(t japanese-jisx0208))
-        (list (cons "not" (make-char 'japanese-jisx0208 34 76))
-              (cons "\\" (make-char 'japanese-jisx0208 38 75))
-              (cons "->" (make-char 'japanese-jisx0208 34 42))
-              (cons "<-" (make-char 'japanese-jisx0208 34 43))
-              (cons "=>" (make-char 'japanese-jisx0208 34 77))
-              ;; FIXME: I'd like to either use ∀ or ∃ depending on how the
-              ;; `forall' keyword is used, but currently the rest of the
-              ;; code assumes that such ambiguity doesn't happen :-(
-              (cons "forall" (make-char 'japanese-jisx0208 34 79))))
-   ;; Or a unicode font.
-   (and (fboundp 'decode-char)
-        (memq purescript-font-lock-symbols '(t unicode))
-        (list (cons "not" (decode-char 'ucs 172))
-              (cons "->" (decode-char 'ucs 8594))
-              (cons "<-" (decode-char 'ucs 8592))
-              (cons "=>" (decode-char 'ucs 8658))
-              (cons "()" (decode-char 'ucs #X2205))
-              (cons "==" (decode-char 'ucs #X2261))
-              (cons "/=" (decode-char 'ucs #X2262))
-              (cons ">=" (decode-char 'ucs #X2265))
-              (cons "<=" (decode-char 'ucs #X2264))
-              (cons "!!" (decode-char 'ucs #X203C))
-              (cons "&&" (decode-char 'ucs #X2227))
-              (cons "||" (decode-char 'ucs #X2228))
-              (cons "sqrt" (decode-char 'ucs #X221A))
-              (cons "undefined" (decode-char 'ucs #X22A5))
-              (cons "pi" (decode-char 'ucs #X3C0))
-              (cons "~>" (decode-char 'ucs 8669)) ;; Omega language
-              ;; (cons "~>" (decode-char 'ucs 8605)) ;; less desirable
-              (cons "-<" (decode-char 'ucs 8610)) ;; Paterson's arrow syntax
-              ;; (cons "-<" (decode-char 'ucs 10521)) ;; nicer but uncommon
-              (cons "::" (decode-char 'ucs 8759))
-              (list "." (decode-char 'ucs 8728) ; (decode-char 'ucs 9675)
-                    ;; Need a predicate here to distinguish the . used by
-                    ;; forall <foo> . <bar>.
-                    'purescript-font-lock-dot-is-not-composition)
-              (cons "forall" (decode-char 'ucs 8704)))))
+  '(("\\" . "λ")
+    ("not" . "¬")
+    ("->" . "→")
+    ("<-" . "←")
+    ("=>" . "⇒")
+    ("()" . "∅")
+    ("==" . "≡")
+    ("/=" . "≢")
+    (">=" . "≥")
+    ("<=" . "≤")
+    ("!!" . "‼")
+    ("&&" . "∧")
+    ("||" . "∨")
+    ("sqrt" . "√")
+    ("undefined" . "⊥")
+    ("pi" . "π")
+    ("~>" . "⇝") ;; Omega language
+    ;; ("~>" "↝") ;; less desirable
+    ("-<" . "↢") ;; Paterson's arrow syntax
+    ;; ("-<" "⤙") ;; nicer but uncommon
+    ("::" . "∷")
+    ("." "∘" ; "○"
+     ;; Need a predicate here to distinguish the . used by
+     ;; forall <foo> . <bar>.
+     purescript-font-lock-dot-is-not-composition)
+    ("forall" . "∀"))
   "Alist mapping PureScript symbols to chars.
-Each element has the form (STRING . CHAR) or (STRING CHAR PREDICATE).
+
+Each element has the form (STRING . COMPONENTS) or (STRING
+COMPONENTS PREDICATE).
+
 STRING is the PureScript symbol.
-CHAR is the character with which to represent this symbol.
+COMPONENTS is a representation specification suitable as an argument to
+`compose-region'.
 PREDICATE if present is a function of one argument (the start position
-of the symbol) which should return non-nil if this mapping should be disabled
-at that position.")
+of the symbol) which should return non-nil if this mapping should
+be disabled at that position.")
 
 (defun purescript-font-lock-dot-is-not-composition (start)
   "Return non-nil if the \".\" at START is not a composition operator.
@@ -140,7 +112,7 @@ This is the case if the \".\" is part of a \"forall <tvar> . <type>\"."
   :group 'purescript)
 
 (defface purescript-pragma-face
-  '((t :inherit font-lock-comment-face))
+  '((t :inherit font-lock-preprocessor-face))
   "Face used to highlight PureScript pragmas."
   :group 'purescript)
 
@@ -193,45 +165,15 @@ Regexp match data 0 points to the chars."
   nil)
 
 (defun purescript-font-lock-symbols-keywords ()
-  (when (fboundp 'compose-region)
-    (let ((alist nil))
-      (dolist (x purescript-font-lock-symbols-alist)
-        (when (and (if (fboundp 'char-displayable-p)
-                       (char-displayable-p (if (consp (cdr x)) (cadr x) (cdr x)))
-                     (if (fboundp 'latin1-char-displayable-p)
-                         (latin1-char-displayable-p (if (consp (cdr x))
-                                                        (cadr x)
-                                                      (cdr x)))
-                       t))
-                   (not (assoc (car x) alist))) ; Not yet in alist.
-          (push x alist)))
-      (when alist
-        `((,(regexp-opt (mapcar 'car alist) t)
-           (0 (purescript-font-lock-compose-symbol ',alist)
-              ;; In Emacs-21, if the `override' field is nil, the face
-              ;; expressions is only evaluated if the text has currently
-              ;; no face.  So force evaluation by using `keep'.
-              keep)))))))
-
-(defun purescript-font-lock-find-pragma (end)
-  (catch 'purescript-font-lock-find-pragma
-    (while (search-forward "{-#" end t)
-      (let* ((begin (match-beginning 0))
-             (ppss (save-excursion (syntax-ppss begin))))
-        ;; We're interested only when it's not in a string or a comment.
-        (unless (or (nth 3 ppss)
-                    (nth 4 ppss))
-          ;; Find the end of the pragma.
-          (let ((end (scan-lists begin 1 0)))
-            ;; Match data contains only the opening {-#, update it to cover the
-            ;; whole pragma.
-            (set-match-data (list begin end))
-            ;; Move to the end so we don't start the next scan from inside the
-            ;; pragma we just found.
-            (goto-char end)
-            (throw 'purescript-font-lock-find-pragma t)))))
-    ;; Found no pragma.
-    nil))
+  (when (and purescript-font-lock-symbols
+	     purescript-font-lock-symbols-alist
+	     (fboundp 'compose-region))
+    `((,(regexp-opt (mapcar 'car purescript-font-lock-symbols-alist) t)
+       (0 (purescript-font-lock-compose-symbol ',purescript-font-lock-symbols-alist)
+	  ;; In Emacs-21, if the `override' field is nil, the face
+	  ;; expressions is only evaluated if the text has currently
+	  ;; no face.  So force evaluation by using `keep'.
+	  keep)))))
 
 ;; The font lock regular expressions.
 (defun purescript-font-lock-keywords-create (literate)
@@ -262,15 +204,15 @@ Returns keywords suitable for `font-lock-keywords'."
           ;; (concat "[" symbol ":]+")
           ;; Add backslash to the symbol-syntax chars.  This seems to
           ;; be thrown for some reason by backslash's escape syntax.
-          "\\(\\s_\\|\\\\\\)+")
+          "\\(\\s.\\|\\\\\\)+")
 
          ;; Reserved operations
          (reservedsym
-          (concat "\\S_"
+          (concat "\\S."
                   ;; (regexp-opt '(".." "::" "=" "\\" "|" "<-" "->"
                   ;;            "@" "~" "=>") t)
-                  "\\(->\\|\\.\\.\\|::\\|∷\\|<-\\|=>\\|[=@\\|~]\\)"
-                  "\\S_"))
+                  "\\(->\\|→\\|\\.\\.\\|::\\|∷\\|<-\\|←\\|=>\\|[=@\\|~]\\)"
+                  "\\S."))
          ;; Reserved identifiers
          (reservedid
           (concat "\\<"
@@ -291,8 +233,8 @@ Returns keywords suitable for `font-lock-keywords'."
          ;; "([^"\\]|\\.)*" for strings and '([^\\]|\\.[^']*)' for
          ;; characters, allowing for string continuations.
          ;; Could probably be improved...
-         ;; (string-and-char
-         ;;  (concat "\\(\\(\"\\|" line-prefix "[ \t]*\\\\\\)\\([^\"\\\\\n]\\|\\\\.\\)*\\(\"\\|\\\\[ \t]*$\\)\\|'\\([^'\\\\\n]\\|\\\\.[^'\n]*\\)'\\)"))
+         (string-and-char
+          (concat "\\(\\(\"\\|" line-prefix "[ \t]*\\\\\\)\\([^\"\\\\\n]\\|\\\\.\\)*\\(\"\\|\\\\[ \t]*$\\)\\|'\\([^'\\\\\n]\\|\\\\.[^'\n]*\\)'\\)"))
 
          ;; Top-level declarations
          (topdecl-var
@@ -318,9 +260,6 @@ Returns keywords suitable for `font-lock-keywords'."
     (setq keywords
           `(;; NOTICE the ordering below is significant
             ;;
-            ("^<<<<<<< .*$" 0 'font-lock-warning-face t)
-            ("^=======" 0 'font-lock-warning-face t)
-            ("^>>>>>>> .*$" 0 'font-lock-warning-face t)
             ("^#.*$" 0 'font-lock-preprocessor-face t)
 
             ,@(purescript-font-lock-symbols-keywords)
@@ -376,9 +315,7 @@ Returns keywords suitable for `font-lock-keywords'."
             ;; Very expensive.
             (,sym 0 (if (eq (char-after (match-beginning 0)) ?:)
                         purescript-constructor-face
-                      purescript-operator-face))
-
-            (purescript-font-lock-find-pragma 0 purescript-pragma-face t)))
+                      purescript-operator-face))))
     (unless (boundp 'font-lock-syntactic-keywords)
       (cl-case literate
         (bird
@@ -447,20 +384,31 @@ that should be commented under LaTeX-style literate scripts."
     ;; might be inside a comment or a string.
     ;; This still gets fooled with "'"'"'"'"'"', but ... oh well.
     ("\\Sw\\('\\)\\([^\\'\n]\\|\\\\.[^\\'\n \"}]*\\)\\('\\)" (1 "|") (3 "|"))
-    ;; The \ is not escaping in \(x,y) -> x + y.
-    ("\\(\\\\\\)(" (1 "."))
-    ;; The second \ in a gap does not quote the subsequent char.
-    ;; It's probably not worth the trouble, tho.
-    ;; ("^[ \t]*\\(\\\\\\)" (1 "."))
     ;; Deal with instances of `--' which don't form a comment
-    ("\\s_\\{3,\\}" (0 (cond ((numberp (nth 4 (syntax-ppss)))
-                              ;; There are no such instances inside nestable comments
+    ("[!#$%&*+./:<=>?@^|~\\-]\\{3,\\}" (0 (cond ((or (nth 3 (syntax-ppss)) (numberp (nth 4 (syntax-ppss))))
+                              ;; There are no such instances inside nestable comments or strings
                               nil)
                              ((string-match "\\`-*\\'" (match-string 0))
                               ;; Sequence of hyphens.  Do nothing in
                               ;; case of things like `{---'.
                               nil)
-                             (t "_")))) ; other symbol sequence
+                             (t ".")))) ; other symbol sequence
+
+    ;; Implement PureScript Report 'escape' and 'gap' rules. Backslash
+    ;; inside of a string is escaping unless it is preceeded by
+    ;; another escaping backslash. There can be whitespace between
+    ;; those two.
+    ;;
+    ;; Backslashes outside of string never escape.
+    ;;
+    ;; Note that (> 0 (skip-syntax-backward ".")) this skips over *escaping*
+    ;; backslashes only.
+    ("\\\\" (0 (when (save-excursion (and (nth 3 (syntax-ppss))
+                                          (goto-char (match-beginning 0))
+                                          (skip-syntax-backward "->")
+                                          (or (not (eq ?\\ (char-before)))
+                                              (> 0 (skip-syntax-backward ".")))))
+                  "\\")))
     ))
 
 (defconst purescript-bird-syntactic-keywords
@@ -475,14 +423,6 @@ that should be commented under LaTeX-style literate scripts."
      ("^\\(\\\\\\)end{code}$" 1 "!"))
    purescript-basic-syntactic-keywords))
 
-(defcustom purescript-font-lock-haddock (boundp 'font-lock-doc-face)
-  "If non-nil try to highlight Haddock comments specially."
-  :type 'boolean
-  :group 'purescript)
-
-(defvar purescript-font-lock-seen-haddock nil)
-(make-variable-buffer-local 'purescript-font-lock-seen-haddock)
-
 (defun purescript-syntactic-face-function (state)
   "`font-lock-syntactic-face-function' for PureScript."
   (cond
@@ -492,41 +432,37 @@ that should be commented under LaTeX-style literate scripts."
         (and (eq purescript-literate 'bird)
              (memq (char-before (nth 8 state)) '(nil ?\n))))
     purescript-literate-comment-face)
-   ;; Try and recognize Haddock comments.  From what I gather from its
-   ;; documentation, its comments can take the following forms:
-   ;; a) {-| ... -}
-   ;; b) {-^ ... -}
-   ;; c) -- | ...
-   ;; d) -- ^ ...
-   ;; e) -- ...
-   ;; Where `e' is the tricky one: it is only a Haddock comment if it
-   ;; follows immediately another Haddock comment.  Even an empty line
-   ;; breaks such a sequence of Haddock comments.  It is not clear if `e'
-   ;; can follow any other case, so I interpreted it as following only cases
-   ;; c,d,e (not a or b).  In any case, this `e' is expensive since it
-   ;; requires extra work for each and every non-Haddock comment, so I only
-   ;; go through the more expensive check if we've already seen a Haddock
-   ;; comment in the buffer.
+   ;; Detect pragmas. A pragma is enclosed in special comment
+   ;; delimeters {-# .. #-}.
+   ((save-excursion
+      (goto-char (nth 8 state))
+      (and (looking-at "{-#")
+           (forward-comment 1)
+           (goto-char (- (point) 3))
+           (looking-at "#-}")))
+    purescript-pragma-face)
+   ;; Haddock comment start with either "-- [|^*$]" or "{- ?[|^*$]"
+   ;; (note space optional for nested comments and mandatory for
+   ;; double dash comments).
    ;;
-   ;; And then there are also haddock section headers that start with
-   ;; any number of stars:
-   ;;   -- * ...
-   ((and purescript-font-lock-haddock
-         (save-excursion
-           (goto-char (nth 8 state))
-           (or (looking-at "[{-]-[ \\t]*[|^*]")
-               (and purescript-font-lock-seen-haddock
-                    (looking-at "--")
-                    (let ((doc nil)
-                          pos)
-                      (while (and (not doc)
-                                  (setq pos (line-beginning-position))
-                                  (forward-comment -1)
-                                  (eq (line-beginning-position 2) pos)
-                                  (looking-at "--\\([ \\t]*[|^*]\\)?"))
-                        (setq doc (match-beginning 1)))
-                      doc)))))
-    (setq purescript-font-lock-seen-haddock t)
+   ;; Haddock comment will also continue on next line, provided:
+   ;; - current line is a double dash haddock comment
+   ;; - next line is also double dash comment
+   ;; - there is only whitespace between
+   ;;
+   ;; We recognize double dash haddock comments by property
+   ;; 'font-lock-doc-face attached to newline. In case of bounded
+   ;; comments newline is outside of comment.
+   ((save-excursion
+      (goto-char (nth 8 state))
+      (or (looking-at "\\(?:{- ?\\|-- \\)[|^*$]")
+	  (and (looking-at "--")              ; are we at double dash comment
+	       (forward-line -1)              ; this is nil on first line
+	       (eq (get-text-property (line-end-position) 'face)
+		   font-lock-doc-face) 	      ; is a doc face
+	       (forward-line)
+	       (skip-syntax-forward "-")      ; see if there is only whitespace
+	       (eq (point) (nth 8 state)))))  ; we are back in position
     font-lock-doc-face)
    (t font-lock-comment-face)))
 
@@ -649,6 +585,7 @@ Invokes `purescript-font-lock-hook' if not nil."
 (provide 'purescript-font-lock)
 
 ;; Local Variables:
+;; coding: utf-8-unix
 ;; tab-width: 8
 ;; End:
 
