@@ -6,15 +6,23 @@
 
 Emacs major mode for [PureScript][]
 
+## Usage:
+
+### Indentation:
+You can use [haskell-mode indentation](https://github.com/haskell/haskell-mode/wiki/Indentation), e.g:
+
+```elisp
+(add-hook 'purescript-mode-hook #'haskell-indentation-mode)
+```
+
 ## TODO
-+ [ ] Add support for `psc-docs` (clean references to haddock)
 + [ ] Add support for flycheck.
 
 ## Acknowledgements
-[purescript-font-lock.el](purescript-font-lock.el) is forked version of [haskell-font-lock.el](https://github.com/haskell/haskell-mode/blob/master/haskell-font-lock.el).
+This mode ~~steals~~ borrows many ideas from [haskell-mode][].
 
 ## Related Projects
 + @dysinger's [purescript-mode](https://github.com/dysinger/purescript-mode) repurposes [haskell-mode][] for PureScript.
 
 [PureScript]: http://www.purescript.org/
-[haskell-mode]: https://github.com/haskell/haskell-mode
+[haskell-mode]: https://github.com/haskell/haskell-mode "Emacs mode for Haskell"
