@@ -3,7 +3,7 @@
 
 (package "purescript-mode" "0.1" "PureScript major mode.")
 
-(files "inf-purescript.el"
+(files "psci.el"
        "purescript-mode.el"
        "purescript-font-lock.el")
 
