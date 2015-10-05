@@ -1,4 +1,4 @@
-;;; purescript-font-lock.el --- Font locking module for PureScript Mode
+;;; purescript-font-lock.el --- Font locking module for PureScript Mode -*- lexical-binding: t -*-
 
 ;; Copyright 2003, 2004, 2005, 2006, 2007, 2008  Free Software Foundation, Inc.
 ;; Copyright 1997-1998  Graeme E Moss, and Tommy Thorn
@@ -30,6 +30,7 @@
 (require 'purescript-mode)
 (require 'font-lock)
 
+;;;###autoload
 (defcustom purescript-font-lock-symbols nil
   "Display \\ and -> and such using symbols in fonts.
 
@@ -38,7 +39,8 @@ alignment and can thus lead to nasty surprises w.r.t layout."
   :group 'purescript
   :type 'boolean)
 
-(defconst purescript-font-lock-symbols-alist
+;;;###autoload
+(defcustom purescript-font-lock-symbols-alist
   '(("\\" . "λ")
     ("not" . "¬")
     ("->" . "→")
@@ -75,21 +77,28 @@ COMPONENTS is a representation specification suitable as an argument to
 `compose-region'.
 PREDICATE if present is a function of one argument (the start position
 of the symbol) which should return non-nil if this mapping should
-be disabled at that position.")
+be disabled at that position."
+  :type '(alist string string)
+  :group 'purescript)
 
 (defun purescript-font-lock-dot-is-not-composition (start)
   "Return non-nil if the \".\" at START is not a composition operator.
 This is the case if the \".\" is part of a \"forall <tvar> . <type>\"."
   (save-excursion
     (goto-char start)
-    (re-search-backward "\\<forall\\>[^.\"]*\\="
-                        (line-beginning-position) t)))
+    (or (re-search-backward "\\<forall\\>[^.\"]*\\="
+                            (line-beginning-position) t)
+        (not (or
+              (string= " " (string (char-after start)))
+              (string= " " (string (char-before start))))))))
 
+;;;###autoload
 (defface purescript-keyword-face
   '((t :inherit font-lock-keyword-face))
   "Face used to highlight PureScript keywords."
   :group 'purescript)
 
+;;;###autoload
 (defface purescript-constructor-face
   '((t :inherit font-lock-type-face))
   "Face used to highlight PureScript constructors."
@@ -106,35 +115,24 @@ This is the case if the \".\" is part of a \"forall <tvar> . <type>\"."
 ;; This is probably just wrong, but it used to use
 ;; `font-lock-function-name-face' with a result that was not consistent with
 ;; other major modes, so I just exchanged with `purescript-definition-face'.
+;;;###autoload
 (defface purescript-operator-face
   '((t :inherit font-lock-variable-name-face))
   "Face used to highlight PureScript operators."
   :group 'purescript)
 
+;;;###autoload
 (defface purescript-pragma-face
   '((t :inherit font-lock-preprocessor-face))
   "Face used to highlight PureScript pragmas."
   :group 'purescript)
 
-(defface purescript-default-face
-  '((t :inherit default))
-  "Face used to highlight ordinary PureScript code."
-  :group 'purescript)
-
+;;;###autoload
 (defface purescript-literate-comment-face
   '((t :inherit font-lock-doc-face))
   "Face with which to fontify literate comments.
 Inherit from `default' to avoid fontification of them."
   :group 'purescript)
-
-;; These variables exist only for backward compatibility.
-(defvar purescript-keyword-face 'purescript-keyword-face)
-(defvar purescript-constructor-face 'purescript-constructor-face)
-(defvar purescript-definition-face 'purescript-definition-face)
-(defvar purescript-operator-face 'purescript-operator-face)
-(defvar purescript-pragma-face 'purescript-pragma-face)
-(defvar purescript-default-face 'purescript-default-face)
-(defvar purescript-literate-comment-face 'purescript-literate-comment-face)
 
 (defun purescript-font-lock-compose-symbol (alist)
   "Compose a sequence of ascii chars into a symbol.
@@ -144,6 +142,7 @@ Regexp match data 0 points to the chars."
          (end (match-end 0))
          (syntaxes (cond
                     ((eq (char-syntax (char-after start)) ?w) '(?w))
+                    ((eq (char-syntax (char-after start)) ?.) '(?.))
                     ;; Special case for the . used for qualified names.
                     ((and (eq (char-after start) ?\.) (= end (1+ start)))
                      '(?_ ?\\ ?w))
@@ -183,36 +182,14 @@ Returns keywords suitable for `font-lock-keywords'."
          ;; "^>", otherwise a line of code starts with "^".
          (line-prefix (if (eq literate 'bird) "^> ?" "^"))
 
-         ;; Most names are borrowed from the lexical syntax of the PureScript
-         ;; report.
-         ;; Some of these definitions have been superseded by using the
-         ;; syntax table instead.
-
-         ;; (ASCsymbol "-!#$%&*+./<=>?@\\\\^|~")
-         ;; Put the minus first to make it work in ranges.
-
-         ;; We allow _ as the first char to fit GHC
          (varid "\\b[[:lower:]_][[:alnum:]'_]*\\b")
          ;; We allow ' preceding conids because of DataKinds/PolyKinds
          (conid "\\b'?[[:upper:]][[:alnum:]'_]*\\b")
          (modid (concat "\\b" conid "\\(\\." conid "\\)*\\b"))
          (qvarid (concat modid "\\." varid))
          (qconid (concat modid "\\." conid))
-         (sym
-          ;; We used to use the below for non-Emacs21, but I think the
-          ;; regexp based on syntax works for other emacsen as well.  -- Stef
-          ;; (concat "[" symbol ":]+")
-          ;; Add backslash to the symbol-syntax chars.  This seems to
-          ;; be thrown for some reason by backslash's escape syntax.
-          "\\(\\s.\\|\\\\\\)+")
+         (sym "\\s.+")
 
-         ;; Reserved operations
-         (reservedsym
-          (concat "\\S."
-                  ;; (regexp-opt '(".." "::" "=" "\\" "|" "<-" "->"
-                  ;;            "@" "~" "=>") t)
-                  "\\(->\\|→\\|\\.\\.\\|::\\|∷\\|<-\\|←\\|=>\\|[=@\\|~]\\)"
-                  "\\S."))
          ;; Reserved identifiers
          (reservedid
           (concat "\\<"
@@ -226,15 +203,6 @@ Returns keywords suitable for `font-lock-keywords'."
                   ;;    "then" "type" "where" "_") t)
                   "\\(_\\|c\\(ase\\|lass\\)\\|d\\(ata\\|e\\(fault\\|riving\\)\\|o\\)\\|else\\|i\\(mport\\|n\\(fix[lr]?\\|stance\\)\\|[fn]\\)\\|let\\|module\\|mdo\\|newtype\\|of\\|rec\\|proc\\|t\\(hen\\|ype\\)\\|where\\)"
                   "\\>"))
-
-         ;; This unreadable regexp matches strings and character
-         ;; constants.  We need to do this with one regexp to handle
-         ;; stuff like '"':"'".  The regexp is the composition of
-         ;; "([^"\\]|\\.)*" for strings and '([^\\]|\\.[^']*)' for
-         ;; characters, allowing for string continuations.
-         ;; Could probably be improved...
-         (string-and-char
-          (concat "\\(\\(\"\\|" line-prefix "[ \t]*\\\\\\)\\([^\"\\\\\n]\\|\\\\.\\)*\\(\"\\|\\\\[ \t]*$\\)\\|'\\([^'\\\\\n]\\|\\\\.[^'\n]*\\)'\\)"))
 
          ;; Top-level declarations
          (topdecl-var
@@ -264,69 +232,58 @@ Returns keywords suitable for `font-lock-keywords'."
 
             ,@(purescript-font-lock-symbols-keywords)
 
-            (,reservedid 1 purescript-keyword-face)
-            (,reservedsym 1 purescript-operator-face)
+            (,reservedid 1 'purescript-keyword-face)
+
             ;; Special case for `as', `hiding', `safe' and `qualified', which are
             ;; keywords in import statements but are not otherwise reserved.
             ("\\<import[ \t]+\\(?:\\(safe\\>\\)[ \t]*\\)?\\(?:\\(qualified\\>\\)[ \t]*\\)?\\(?:\"[^\"]*\"[\t ]*\\)?[^ \t\n()]+[ \t]*\\(?:\\(\\<as\\>\\)[ \t]*[^ \t\n()]+[ \t]*\\)?\\(\\<hiding\\>\\)?"
-             (1 purescript-keyword-face nil lax)
-             (2 purescript-keyword-face nil lax)
-             (3 purescript-keyword-face nil lax)
-             (4 purescript-keyword-face nil lax))
+             (1 'purescript-keyword-face nil lax)
+             (2 'purescript-keyword-face nil lax)
+             (3 'purescript-keyword-face nil lax)
+             (4 'purescript-keyword-face nil lax))
 
-            (,reservedsym 1 purescript-operator-face)
             ;; Special case for `foreign import'
             ;; keywords in foreign import statements but are not otherwise reserved.
             ("\\<\\(foreign\\)[ \t]+\\(import\\)[ \t]+\\(?:\\(ccall\\|stdcall\\|cplusplus\\|jvm\\|dotnet\\)[ \t]+\\)?\\(?:\\(safe\\|unsafe\\|interruptible\\)[ \t]+\\)?"
-             (1 purescript-keyword-face nil lax)
-             (2 purescript-keyword-face nil lax)
-             (3 purescript-keyword-face nil lax)
-             (4 purescript-keyword-face nil lax))
+             (1 'purescript-keyword-face nil lax)
+             (2 'purescript-keyword-face nil lax)
+             (3 'purescript-keyword-face nil lax)
+             (4 'purescript-keyword-face nil lax))
 
-            (,reservedsym 1 purescript-operator-face)
             ;; Special case for `foreign export'
             ;; keywords in foreign export statements but are not otherwise reserved.
             ("\\<\\(foreign\\)[ \t]+\\(export\\)[ \t]+\\(?:\\(ccall\\|stdcall\\|cplusplus\\|jvm\\|dotnet\\)[ \t]+\\)?"
-             (1 purescript-keyword-face nil lax)
-             (2 purescript-keyword-face nil lax)
-             (3 purescript-keyword-face nil lax))
+             (1 'purescript-keyword-face nil lax)
+             (2 'purescript-keyword-face nil lax)
+             (3 'purescript-keyword-face nil lax))
 
             ;; Toplevel Declarations.
             ;; Place them *before* generic id-and-op highlighting.
-            (,topdecl-var  (1 purescript-definition-face))
-            (,topdecl-var2 (2 purescript-definition-face))
-            (,topdecl-bangpat  (1 purescript-definition-face))
-            (,topdecl-sym  (2 purescript-definition-face))
-            (,topdecl-sym2 (1 purescript-definition-face))
+            (,topdecl-var  (1 'purescript-definition-face))
+            (,topdecl-var2 (2 'purescript-definition-face))
+            (,topdecl-bangpat  (1 'purescript-definition-face))
+            (,topdecl-sym  (2 (unless (member (match-string 2) '("\\" "=" "->" "→" "<-" "←" "::" "∷" "," ";" "`"))
+                                'purescript-definition-face)))
+            (,topdecl-sym2 (1 (unless (member (match-string 1) '("\\" "=" "->" "→" "<-" "←" "::" "∷" "," ";" "`"))
+                                'purescript-definition-face)))
 
             ;; These four are debatable...
-            ("(\\(,*\\|->\\))" 0 purescript-constructor-face)
-            ("\\[\\]" 0 purescript-constructor-face)
-            ;; Expensive.
-            (,(concat "`" varid "`") 0 purescript-operator-face)
-            (,(concat "`" conid "`") 0 purescript-operator-face)
-            (,(concat "`" qvarid "`") 0 purescript-operator-face)
-            (,(concat "`" qconid "`") 0 purescript-operator-face)
-            (,qvarid 0 purescript-default-face)
-            (,qconid 0 purescript-constructor-face)
-            ;; Expensive.
-            (,conid 0 purescript-constructor-face)
+            ("(\\(,*\\|->\\))" 0 'purescript-constructor-face)
+            ("\\[\\]" 0 'purescript-constructor-face)
 
-            ;; Very expensive.
-            (,sym 0 (if (eq (char-after (match-beginning 0)) ?:)
-                        purescript-constructor-face
-                      purescript-operator-face))))
-    (unless (boundp 'font-lock-syntactic-keywords)
-      (cl-case literate
-        (bird
-         (setq keywords
-               `(("^[^>\n].*$" 0 purescript-comment-face t)
-                 ,@keywords
-                 ("^>" 0 purescript-default-face t))))
-        ((latex tex)
-         (setq keywords
-               `((purescript-font-lock-latex-comments 0 'font-lock-comment-face t)
-                 ,@keywords)))))
+            (,(concat "`" varid "`") 0 'purescript-operator-face)
+            (,(concat "`" conid "`") 0 'purescript-operator-face)
+            (,(concat "`" qvarid "`") 0 'purescript-operator-face)
+            (,(concat "`" qconid "`") 0 'purescript-operator-face)
+
+            (,qconid 0 'purescript-constructor-face)
+
+            (,conid 0 'purescript-constructor-face)
+
+            (,sym 0 (if (and (eq (char-after (match-beginning 0)) ?:)
+                             (not (member (match-string 0) '("::" "∷"))))
+                        'purescript-constructor-face
+                      'purescript-operator-face))))
     keywords))
 
 (defvar purescript-font-lock-latex-cache-pos nil
@@ -383,15 +340,19 @@ that should be commented under LaTeX-style literate scripts."
     ;; Beware: do not match something like 's-}' or '\n"+' since the first '
     ;; might be inside a comment or a string.
     ;; This still gets fooled with "'"'"'"'"'"', but ... oh well.
-    ("\\Sw\\('\\)\\([^\\'\n]\\|\\\\.[^\\'\n \"}]*\\)\\('\\)" (1 "|") (3 "|"))
+    ("\\Sw\\('\\)\\([^\\'\n]\\|\\\\.[^\\'\n \"}]*\\)\\('\\)" (1 "\"") (3 "\""))
     ;; Deal with instances of `--' which don't form a comment
-    ("[!#$%&*+./:<=>?@^|~\\-]\\{3,\\}" (0 (cond ((or (nth 3 (syntax-ppss)) (numberp (nth 4 (syntax-ppss))))
-                              ;; There are no such instances inside nestable comments or strings
+    ("[!#$%&*+./:<=>?@^|~\\]*--[!#$%&*+./:<=>?@^|~\\-]*" (0 (cond ((or (nth 3 (syntax-ppss)) (numberp (nth 4 (syntax-ppss))))
+                              ;; There are no such instances inside
+                              ;; nestable comments or strings
                               nil)
                              ((string-match "\\`-*\\'" (match-string 0))
-                              ;; Sequence of hyphens.  Do nothing in
+                              ;; Sequence of hyphens. Do nothing in
                               ;; case of things like `{---'.
                               nil)
+                             ((string-match "\\`[^-]+--.*" (match-string 0))
+                              ;; Extra characters before comment starts
+                              ".")
                              (t ".")))) ; other symbol sequence
 
     ;; Implement PureScript Report 'escape' and 'gap' rules. Backslash
@@ -409,6 +370,42 @@ that should be commented under LaTeX-style literate scripts."
                                           (or (not (eq ?\\ (char-before)))
                                               (> 0 (skip-syntax-backward ".")))))
                   "\\")))
+
+    ;; QuasiQuotes syntax: [quoter| string |], quoter is unqualified
+    ;; name, no spaces, string is arbitrary (including newlines),
+    ;; finishes at the first occurence of |], no escaping is provided.
+    ;;
+    ;; The quoter cannot be "e", "t", "d", or "p", since those overlap
+    ;; with Template PureScript quotations.
+    ;;
+    ;; QuasiQuotes opens only when outside of a string or a comment
+    ;; and closes only when inside a quasiquote.
+    ;;
+    ;; (syntax-ppss) returns list with two interesting elements:
+    ;; nth 3. non-nil if inside a string. (it is the character that will
+    ;;        terminate the string, or t if the string should be terminated
+    ;;        by a generic string delimiter.)
+    ;; nth 4. nil if outside a comment, t if inside a non-nestable comment,
+    ;;        else an integer (the current comment nesting).
+    ;;
+    ;; Note also that we need to do in in a single pass, hence a regex
+    ;; that covers both the opening and the ending of a quasiquote.
+
+    ("\\(\\[[[:alnum:]]+\\)?\\(|\\)\\(]\\)?"
+     (2 (save-excursion
+          (goto-char (match-beginning 0))
+          (if (eq ?\[ (char-after))
+              ;; opening case
+              (unless (or (nth 3 (syntax-ppss))
+                          (nth 4 (syntax-ppss))
+                          (member (match-string 1)
+                                  '("[e" "[t" "[d" "[p")))
+                "\"")
+            ;; closing case
+            (when (and (eq ?| (nth 3 (syntax-ppss)))
+                       (equal "]" (match-string 3))
+                       )
+              "\"")))))
     ))
 
 (defconst purescript-bird-syntactic-keywords
@@ -426,12 +423,12 @@ that should be commented under LaTeX-style literate scripts."
 (defun purescript-syntactic-face-function (state)
   "`font-lock-syntactic-face-function' for PureScript."
   (cond
-   ((nth 3 state) font-lock-string-face) ; as normal
+   ((nth 3 state) 'font-lock-string-face) ; as normal
    ;; Else comment.  If it's from syntax table, use default face.
    ((or (eq 'syntax-table (nth 7 state))
         (and (eq purescript-literate 'bird)
              (memq (char-before (nth 8 state)) '(nil ?\n))))
-    purescript-literate-comment-face)
+    'purescript-literate-comment-face)
    ;; Detect pragmas. A pragma is enclosed in special comment
    ;; delimeters {-# .. #-}.
    ((save-excursion
@@ -440,7 +437,7 @@ that should be commented under LaTeX-style literate scripts."
            (forward-comment 1)
            (goto-char (- (point) 3))
            (looking-at "#-}")))
-    purescript-pragma-face)
+    'purescript-pragma-face)
    ;; Haddock comment start with either "-- [|^*$]" or "{- ?[|^*$]"
    ;; (note space optional for nested comments and mandatory for
    ;; double dash comments).
@@ -459,12 +456,12 @@ that should be commented under LaTeX-style literate scripts."
 	  (and (looking-at "--")              ; are we at double dash comment
 	       (forward-line -1)              ; this is nil on first line
 	       (eq (get-text-property (line-end-position) 'face)
-		   font-lock-doc-face) 	      ; is a doc face
+		   'font-lock-doc-face)	      ; is a doc face
 	       (forward-line)
 	       (skip-syntax-forward "-")      ; see if there is only whitespace
 	       (eq (point) (nth 8 state)))))  ; we are back in position
-    font-lock-doc-face)
-   (t font-lock-comment-face)))
+    'font-lock-doc-face)
+   (t 'font-lock-comment-face)))
 
 (defconst purescript-font-lock-keywords
   (purescript-font-lock-keywords-create nil)

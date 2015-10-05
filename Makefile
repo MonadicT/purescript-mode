@@ -1,5 +1,8 @@
+SED   ?= sed
 CASK  ?= cask
-EMACS ?= emacs
+CURL  ?= curl
+
+EMACS = emacs
 
 export EMACS
 
@@ -9,10 +12,10 @@ PKGDIR := $(shell EMACS=$(EMACS) $(CASK) package-directory)
 
 all: build
 
-build: Cask
+build: $(PKGDIR)
 	$(CASK) build
 
-package: Cask
+package: $(PKGDIR)
 	$(CASK) package
 
 clean:
@@ -21,3 +24,8 @@ clean:
 $(PKGDIR): Cask
 	$(CASK) install
 	touch $(PKGDIR)
+
+.PHONY: purescript-font-lock.el
+purescript-font-lock.el:
+	$(CURL) -L -o $@ "https://github.com/haskell/haskell-mode/raw/master/haskell-font-lock.el"
+	$(SED) -i -e 's/Haskell/PureScript/g' -e 's/haskell/purescript/g' $@
