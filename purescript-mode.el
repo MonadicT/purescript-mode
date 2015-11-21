@@ -420,18 +420,20 @@ May return a qualified name."
 
 
 
-(defvar purescript-mode-psc-error-regexp
-  (rx line-start (or "Error" "Warning") " at " (group (minimal-match (one-or-more not-newline)))
-      " line " (group (+ num)) ", column " (group (+ num)) " - line " (group (+ num)) ", column " (group (+ num)) ":")
-  "Regexp for psc error.")
-
-(defvar purescript-mode-compilation-regex-alist
-  `((psc ,purescript-mode-psc-error-regexp 2 (3 . 5)  (4 . 6)))
+;;;###autoload
+(defvar purescript-mode-compilation-regex-alist-alist
+  `((psc ,(rx line-start (* space) (? "Error ") "at " (group (minimal-match (one-or-more not-newline)))
+              " line " (group (+ num)) ", column " (group (+ num)) " - line " (group (+ num)) ", column " (group (+ num)) (? ":"))
+         1 (2 . 3) (4 . 5) (6 . nil)))
   "Alist for PureScript errors.  See: `compilation-error-regexp-alist'.")
 
 ;;;###autoload
+(defvar purescript-mode-compilation-regex-alist (mapcar 'cdr purescript-mode-compilation-regex-alist-alist)
+  "PureScript `compilation-error-regexp-alist'.")
+
+;;;###autoload
 (eval-after-load 'compile
-  '(dolist (alist purescript-mode-compilation-regex-alist)
+  '(dolist (alist purescript-mode-compilation-regex-alist-alist)
      (add-to-list 'compilation-error-regexp-alist (car alist))
      (add-to-list 'compilation-error-regexp-alist-alist alist)))
 
