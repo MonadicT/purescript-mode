@@ -68,19 +68,15 @@
   (set (make-local-variable 'comint-prompt-regexp)
        psci-prompt-regexp)
   (set (make-local-variable 'comint-prompt-read-only) t)
-  (set (make-local-variable 'font-lock-defaults) '(purescript-font-lock-keywords))
-  (set (make-local-variable 'comment-start) "-- ")
-  (set (make-local-variable 'comment-use-syntax) t)
   (set (make-local-variable 'compilation-error-regexp-alist)
-       purescript-mode-compilation-regex-alist))
+       purescript-mode-compilation-regex-alist)
+  (compilation-shell-minor-mode 1))
 
 
 ;;;###autoload
 (defun psci-write-dotpsci (&optional directory)
   "Write .psci file collecting sources and ffis and from DIRECTORY recursively."
-  (interactive (let ((project-root (purescript-project-root)))
-                 (list (or (and (not current-prefix-arg) project-root)
-                           (read-directory-name "Directory: " project-root)))))
+  (interactive (psci-read-project-root))
   (let* ((default-directory (file-name-as-directory directory))
          (dotpsci (expand-file-name psci-dotpsci-file-name))
          (bower-purs (psci-bower-directory-purescript-glob))
@@ -112,6 +108,12 @@
   "Read directories defined in DIRECTORY."
   (let ((bowerrc (expand-file-name ".bowerrc" directory)))
     (or (assoc-default 'directory (ignore-errors (json-read-file bowerrc))) "bower_components")))
+
+(defun psci-read-project-root ()
+  "Read PureScript project root."
+  (let ((project-root (purescript-project-root)))
+    (list (or (and (not current-prefix-arg) project-root)
+              (read-directory-name "Project root: " project-root)))))
 
 (defvar eshell-glob-matches)
 (defun psci-extend-glob (glob)
@@ -147,11 +149,9 @@ Based on `eshell-extended-glob'"
 (defalias 'run-psci #'psci)
 
 ;;;###autoload
-(defun psci (&optional directory)
+(defun psci (directory)
   "Run psci interpreter inside DIRECTORY."
-  (interactive (let ((project-root (purescript-project-root)))
-                 (list (or (and (not current-prefix-arg) project-root)
-                           (read-directory-name "Directory: " project-root)))))
+  (interactive (psci-read-project-root))
   (let* ((default-directory (file-name-as-directory directory))
          (buffer (make-comint-in-buffer "psci" psci-buffer-name psci-executable)))
     (with-current-buffer buffer
