@@ -52,13 +52,15 @@
   :type 'string
   :group 'purescript)
 
-(defcustom purescript-project-root-files '(".psci"
-                                           ".psci_modules"
-                                           "bower.json"
-                                           "package.json"
-                                           "bower_components"
-                                           ".bowerrc" ; XXX: At the end because could be found in $HOME
-                                           )
+(defcustom purescript-project-root-files
+  '(".psci"                             ; PureScript .psci file
+    ".psci_modules"                     ; PureScript .psci_modules directory
+    "bower.json"                        ; Bower project file
+    "package.json"                      ; npm package file
+    "gulpfile.js"                       ; Gulp build file
+    "Gruntfile.js"                      ; Grunt project file
+    "bower_components"                  ; Bower components directory
+    )
   "List of files which be considered to locate the project root.
 The topmost match has precedence."
   :type '(repeat string)
