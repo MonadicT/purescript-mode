@@ -5,7 +5,10 @@
 
 (files "psci.el"
        "purescript-mode.el"
+       "flycheck-purescript.el"
        "purescript-font-lock.el")
+
+(depends-on "flycheck")
 
 (development
  (depends-on "ert")

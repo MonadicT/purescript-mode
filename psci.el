@@ -91,6 +91,17 @@
       (dolist (ffi ffis)
         (insert (format ":foreign %s\n" ffi))))))
 
+;;;###autoload
+(defun psci-purs-flags (&optional directory)
+  "Calculate the purescript psc command flags from DIRECTORY."
+  (interactive (psci-read-project-root))
+  (let* ((default-directory (or directory (purescript-project-root) default-directory))
+         (bower-purs (psci-bower-directory-purescript-glob)))
+    (list (expand-file-name "**/*.purs" bower-purs)
+          (expand-file-name "src/**/*.purs")
+          "--ffi" (expand-file-name "**/*.js" bower-purs)
+          "--ffi" (expand-file-name "src/**/*.js"))))
+
 (defun psci-collect-purescript-sources (directory)
   "Collect recursively the PureScript sources from a DIRECTORY."
   (psci-extend-glob (concat (file-name-as-directory directory) "**/*.purs")))
