@@ -5,10 +5,15 @@
 
 (files "psci.el"
        "purescript-mode.el"
-       "flycheck-purescript.el"
-       "purescript-font-lock.el")
+       "purescript-font-lock.el"
 
-(depends-on "flycheck")
+       "psc-ide.el"
+       "flycheck-purescript.el"
+       )
+
+(depends-on "queue")                    ; psc-ide
+(depends-on "let-alist")                ; psc-ide
+(depends-on "flycheck")                 ; flycheck-purescript
 
 (development
  (depends-on "ert")
