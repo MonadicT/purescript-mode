@@ -56,7 +56,7 @@
 (defcustom psci-buffer-name "*psci*"
   "Default buffer name for psci interpreter."
   :type 'string
-  :safe 'stringp
+  :safe #'stringp
   :group 'psci)
 
 (defconst psci-dotpsci-file-name ".psci"

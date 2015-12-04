@@ -15,9 +15,6 @@ You can use [haskell-mode indentation](https://github.com/haskell/haskell-mode/w
 (add-hook 'purescript-mode-hook #'haskell-indentation-mode)
 ```
 
-## TODO
-+ [ ] Add support for flycheck.
-
 ## Acknowledgements
 This mode ~~steals~~ borrows many ideas from [haskell-mode][].
 

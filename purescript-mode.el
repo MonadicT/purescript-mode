@@ -44,7 +44,7 @@
 (defcustom purescript-project-root nil
   "Path to the PureScript project root."
   :type 'string
-  :safe 'stringp
+  :safe #'file-directory-p
   :group 'purescript)
 
 (defcustom purescript-node-executable "node"
