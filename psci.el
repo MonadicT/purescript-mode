@@ -59,6 +59,12 @@
   :safe #'stringp
   :group 'psci)
 
+(defcustom psci-prepopulate-dotpsci nil
+  "Whether to write .psci file before start a psci repl."
+  :type 'boolean
+  :safe #'booleanp
+  :group 'psci)
+
 (defconst psci-dotpsci-file-name ".psci"
   "Psci script file name.")
 
@@ -152,14 +158,14 @@ Based on `eshell-extended-glob'"
 (defalias 'run-psci #'psci)
 
 ;;;###autoload
-(defun psci (directory)
+(defun psci (&optional directory)
   "Run psci interpreter inside DIRECTORY."
   (interactive (psci-read-project-root))
-  (let* ((default-directory (file-name-as-directory directory))
-         (buffer (make-comint-in-buffer "psci" psci-buffer-name psci-executable)))
-    (with-current-buffer buffer
-      (psci-mode))
-    (switch-to-buffer psci-buffer-name)))
+  (let ((default-directory (file-name-as-directory (expand-file-name (or directory default-directory)))))
+    (and psci-prepopulate-dotpsci (psci-write-dotpsci))
+    (with-current-buffer (make-comint-in-buffer "psci" psci-buffer-name psci-executable)
+      (psci-mode)
+      (switch-to-buffer (current-buffer)))))
 
 
 ;;; psci-script mode
