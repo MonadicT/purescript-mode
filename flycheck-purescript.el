@@ -6,7 +6,7 @@
 ;; URL:
 ;; Keywords: convenience, tools, languages
 ;; Version: 0.1
-;; Package-Requires: ((emacs "24") (flycheck "0.22"))
+;; Package-Requires: ((emacs "24.3") (flycheck "0.22"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -31,11 +31,20 @@
 (require 'psci)
 (require 'flycheck)
 
+(defun flycheck-purescript-purs-flags (directory)
+  "Calculate the purescript psc command flags from DIRECTORY."
+  (let* ((default-directory (file-name-as-directory (expand-file-name directory)))
+         (bower-purs (psci-bower-directory-purescript-glob)))
+    (list (expand-file-name "**/*.purs" bower-purs)
+          (expand-file-name "src/**/*.purs")
+          "--ffi" (expand-file-name "**/*.js" bower-purs)
+          "--ffi" (expand-file-name "src/**/*.js"))))
+
 (flycheck-define-checker psc
   "A Purescript syntax checker using psc."
   :command ("psc"
             "--no-magic-do" "--no-prefix" "--no-opts" "--verbose-errors" ; disable optimizations
-            (eval (psci-purs-flags))    ; psci flags
+            (eval (flycheck-purescript-purs-flags (purescript-project-root-or-error))) ; psci flags
             "--output" temporary-directory
             )
   :error-patterns
@@ -49,6 +58,8 @@
                                           (zero-or-more space)
                                           (one-or-more not-newline)))))
           line-end)
+
+   ;; XXX: PureScript 0.7.6 errors
    (error line-start "at " (file-name) " line " line ", column " column " - line " (+ num) ", column " (+ num)
           (or (message (one-or-more not-newline))
               (and (one-or-more "\n")
@@ -65,7 +76,6 @@
           line-end))
   :predicate (lambda () (purescript-project-root)) ; Only check when `purescript-project-root' is defined
   :modes purescript-mode)
-
 
 ;;;###autoload
 (defun flycheck-purescript-setup ()

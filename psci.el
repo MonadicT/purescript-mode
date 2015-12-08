@@ -74,10 +74,13 @@
 
 
 ;;;###autoload
+(defalias 'dotpsci #'psci-write-dotpsci)
+
+;;;###autoload
 (defun psci-write-dotpsci (&optional directory)
   "Write .psci file collecting sources and ffis and from DIRECTORY recursively."
   (interactive (psci-read-project-root))
-  (let* ((default-directory (file-name-as-directory directory))
+  (let* ((default-directory (file-name-as-directory (expand-file-name (or directory default-directory))))
          (dotpsci (expand-file-name psci-dotpsci-file-name))
          (bower-purs (psci-bower-directory-purescript-glob))
          (sources (append (psci-collect-purescript-sources "src/")
@@ -90,17 +93,6 @@
         (insert (format ":load %s\n" source)))
       (dolist (ffi ffis)
         (insert (format ":foreign %s\n" ffi))))))
-
-;;;###autoload
-(defun psci-purs-flags (&optional directory)
-  "Calculate the purescript psc command flags from DIRECTORY."
-  (interactive (psci-read-project-root))
-  (let* ((default-directory (or directory (purescript-project-root) default-directory))
-         (bower-purs (psci-bower-directory-purescript-glob)))
-    (list (expand-file-name "**/*.purs" bower-purs)
-          (expand-file-name "src/**/*.purs")
-          "--ffi" (expand-file-name "**/*.js" bower-purs)
-          "--ffi" (expand-file-name "src/**/*.js"))))
 
 (defun psci-collect-purescript-sources (directory)
   "Collect recursively the PureScript sources from a DIRECTORY."
