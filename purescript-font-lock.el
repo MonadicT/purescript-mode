@@ -30,16 +30,14 @@
 (require 'purescript-mode)
 (require 'font-lock)
 
-;;;###autoload
 (defcustom purescript-font-lock-symbols nil
   "Display \\ and -> and such using symbols in fonts.
 
 This may sound like a neat trick, but be extra careful: it changes the
-alignment and can thus lead to nasty surprises w.r.t layout."
+alignment and can thus lead to nasty surprises with regards to layout."
   :group 'purescript
   :type 'boolean)
 
-;;;###autoload
 (defcustom purescript-font-lock-symbols-alist
   '(("\\" . "λ")
     ("not" . "¬")
@@ -92,6 +90,26 @@ This is the case if the \".\" is part of a \"forall <tvar> . <type>\"."
               (string= " " (string (char-after start)))
               (string= " " (string (char-before start))))))))
 
+(defcustom purescript-font-lock-quasi-quote-modes
+  `(("hsx" . xml-mode)
+    ("hamlet" . xml-mode)
+    ("shamlet" . xml-mode)
+    ("xmlQQ" . xml-mode)
+    ("xml" . xml-mode)
+    ("cmd" . shell-mode)
+    ("sh_" . shell-mode)
+    ("jmacro" . javascript-mode)
+    ("jmacroE" . javascript-mode)
+    ("r" . ess-mode)
+    ("rChan" . ess-mode)
+    ("sql" . sql-mode))
+  "Mapping from quasi quoter token to fontification mode.
+
+If a quasi quote is seen in PureScript code its contents will have
+font faces assigned as if respective mode was enabled."
+  :group 'purescript
+  :type '(repeat (cons string symbol)))
+
 ;;;###autoload
 (defface purescript-keyword-face
   '((t :inherit font-lock-keyword-face))
@@ -132,6 +150,14 @@ This is the case if the \".\" is part of a \"forall <tvar> . <type>\"."
   '((t :inherit font-lock-doc-face))
   "Face with which to fontify literate comments.
 Inherit from `default' to avoid fontification of them."
+  :group 'purescript)
+
+(defface purescript-quasi-quote-face
+  '((t :inherit font-lock-string-face))
+  "Generic face for quasiquotes.
+
+Some quote types are fontified according to other mode defined in
+`purescript-font-lock-quasi-quote-modes'."
   :group 'purescript)
 
 (defun purescript-font-lock-compose-symbol (alist)
@@ -257,6 +283,12 @@ Returns keywords suitable for `font-lock-keywords'."
              (2 'purescript-keyword-face nil lax)
              (3 'purescript-keyword-face nil lax))
 
+            ;; Special case for `type family' and `data family'.
+            ;; `family' is only reserved in these contexts.
+            ("\\<\\(type\\|data\\)[ \t]+\\(family\\>\\)"
+             (1 'purescript-keyword-face nil lax)
+             (2 'purescript-keyword-face nil lax))
+
             ;; Toplevel Declarations.
             ;; Place them *before* generic id-and-op highlighting.
             (,topdecl-var  (1 'purescript-definition-face))
@@ -285,55 +317,6 @@ Returns keywords suitable for `font-lock-keywords'."
                         'purescript-constructor-face
                       'purescript-operator-face))))
     keywords))
-
-(defvar purescript-font-lock-latex-cache-pos nil
-  "Position of cache point used by `purescript-font-lock-latex-cache-in-comment'.
-Should be at the start of a line.")
-(make-variable-buffer-local 'purescript-font-lock-latex-cache-pos)
-
-(defvar purescript-font-lock-latex-cache-in-comment nil
-  "If `purescript-font-lock-latex-cache-pos' is outside a
-\\begin{code}..\\end{code} block (and therefore inside a comment),
-this variable is set to t, otherwise nil.")
-(make-variable-buffer-local 'purescript-font-lock-latex-cache-in-comment)
-
-(defun purescript-font-lock-latex-comments (end)
-  "Sets `match-data' according to the region of the buffer before end
-that should be commented under LaTeX-style literate scripts."
-  (let ((start (point)))
-    (if (= start end)
-        ;; We're at the end.  No more to fontify.
-        nil
-      (if (not (eq start purescript-font-lock-latex-cache-pos))
-          ;; If the start position is not cached, calculate the state
-          ;; of the start.
-          (progn
-            (setq purescript-font-lock-latex-cache-pos start)
-            ;; If the previous \begin{code} or \end{code} is a
-            ;; \begin{code}, then start is not in a comment, otherwise
-            ;; it is in a comment.
-            (setq purescript-font-lock-latex-cache-in-comment
-                  (if (and
-                       (re-search-backward
-                        "^\\(\\(\\\\begin{code}\\)\\|\\(\\\\end{code}\\)\\)$"
-                        (point-min) t)
-                       (match-end 2))
-                      nil t))
-            ;; Restore position.
-            (goto-char start)))
-      (if purescript-font-lock-latex-cache-in-comment
-          (progn
-            ;; If start is inside a comment, search for next \begin{code}.
-            (re-search-forward "^\\\\begin{code}$" end 'move)
-            ;; Mark start to end of \begin{code} (if present, till end
-            ;; otherwise), as a comment.
-            (set-match-data (list start (point)))
-            ;; Return point, as a normal regexp would.
-            (point))
-        ;; If start is inside a code block, search for next \end{code}.
-        (if (re-search-forward "^\\\\end{code}$" end t)
-            ;; If one found, mark it as a comment, otherwise finish.
-            (point))))))
 
 (defconst purescript-basic-syntactic-keywords
   '(;; Character constants (since apostrophe can't have string syntax).
@@ -420,10 +403,54 @@ that should be commented under LaTeX-style literate scripts."
      ("^\\(\\\\\\)end{code}$" 1 "!"))
    purescript-basic-syntactic-keywords))
 
+(defun purescript-font-lock-fontify-block (lang-mode start end)
+  "Fontify a block as LANG-MODE."
+  (let ((string (buffer-substring-no-properties start end))
+        (modified (buffer-modified-p))
+        (org-buffer (current-buffer)) pos next)
+    (remove-text-properties start end '(face nil))
+    (with-current-buffer
+        (get-buffer-create
+         (concat " purescript-font-lock-fontify-block:" (symbol-name lang-mode)))
+      (delete-region (point-min) (point-max))
+      (insert string " ") ;; so there's a final property change
+      (unless (eq major-mode lang-mode) (funcall lang-mode))
+      (font-lock-ensure)
+      (setq pos (point-min))
+      (while (setq next (next-single-property-change pos 'face))
+        (put-text-property
+         (+ start (1- pos)) (1- (+ start next)) 'face
+         (get-text-property pos 'face) org-buffer)
+        (setq pos next)))
+    (add-text-properties
+     start end
+     '(font-lock-fontified t fontified t font-lock-multiline t))
+    (set-buffer-modified-p modified)))
+
 (defun purescript-syntactic-face-function (state)
   "`font-lock-syntactic-face-function' for PureScript."
   (cond
-   ((nth 3 state) 'font-lock-string-face) ; as normal
+   ((nth 3 state)
+    (if (equal ?| (nth 3 state))
+        ;; find out what kind of QuasiQuote is this
+        (let* ((qqname (save-excursion
+                        (goto-char (nth 8 state))
+                        (skip-syntax-backward "w._")
+                        (buffer-substring-no-properties (point) (nth 8 state))))
+               (lang-mode (cdr (assoc qqname purescript-font-lock-quasi-quote-modes))))
+
+          (if (and lang-mode
+                   (fboundp lang-mode))
+              (save-excursion
+                ;; find the end of the QuasiQuote
+                (parse-partial-sexp (point) (point-max) nil nil state
+                                    'syntax-table)
+                (purescript-font-lock-fontify-block lang-mode (1+ (nth 8 state)) (1- (point)))
+                ;; must return nil here so that it is not fontified again as string
+                nil)
+            ;; fontify normally as string because lang-mode is not present
+            'purescript-quasi-quote-face))
+      'font-lock-string-face))
    ;; Else comment.  If it's from syntax table, use default face.
    ((or (eq 'syntax-table (nth 7 state))
         (and (eq purescript-literate 'bird)
