@@ -36,7 +36,6 @@
 (require 'comint)
 (require 'em-glob)
 (require 'purescript-mode)
-(require 'purescript-font-lock)
 
 (defgroup psci nil
   "Settings for REPL interaction via `inferior-purescript-mode'"
@@ -68,6 +67,14 @@
 (defconst psci-dotpsci-file-name ".psci"
   "Psci script file name.")
 
+(defmacro with-psci-default-directory (directory &rest body)
+  "Macro to change `default-directory' to DIRECTORY and execute BODY."
+  (declare (indent 1) (debug t))
+  `(let ((default-directory (or (and ,directory
+                                     (file-name-as-directory ,directory))
+                                default-directory)))
+     ,@body))
+
 (define-derived-mode psci-mode comint-mode "Psci"
   "Major mode for interacting with an inferior PureScript process."
   :group 'psci
@@ -83,22 +90,22 @@
 (defalias 'dotpsci #'psci-write-dotpsci)
 
 ;;;###autoload
-(defun psci-write-dotpsci (&optional directory)
+(defun psci-write-dotpsci (directory)
   "Write .psci file collecting sources and ffis and from DIRECTORY recursively."
   (interactive (psci-read-project-root))
-  (let* ((default-directory (file-name-as-directory (expand-file-name (or directory default-directory))))
-         (dotpsci (expand-file-name psci-dotpsci-file-name))
-         (bower-purs (psci-bower-directory-purescript-glob))
-         (sources (append (psci-collect-purescript-sources "src/")
-                          (psci-collect-purescript-sources bower-purs)))
-         (ffis (append (psci-collect-purescript-ffis "src/")
-                       (psci-collect-purescript-ffis bower-purs))))
-    (message "Writing %s" dotpsci)
-    (with-temp-file dotpsci
-      (dolist (source sources)
-        (insert (format ":load %s\n" source)))
-      (dolist (ffi ffis)
-        (insert (format ":foreign %s\n" ffi))))))
+  (with-psci-default-directory directory
+    (let* ((dotpsci (expand-file-name psci-dotpsci-file-name))
+           (bower-purs (psci-bower-directory-purescript-glob))
+           (sources (append (psci-collect-purescript-sources "src/")
+                            (psci-collect-purescript-sources bower-purs)))
+           (ffis (append (psci-collect-purescript-ffis "src/")
+                         (psci-collect-purescript-ffis bower-purs))))
+      (message "Writing %s..." dotpsci)
+      (with-temp-file dotpsci
+        (dolist (source sources)
+          (insert (format ":load %s\n" source)))
+        (dolist (ffi ffis)
+          (insert (format ":foreign %s\n" ffi)))))))
 
 (defun psci-collect-purescript-sources (directory)
   "Collect recursively the PureScript sources from a DIRECTORY."
@@ -158,11 +165,11 @@ Based on `eshell-extended-glob'"
 (defalias 'run-psci #'psci)
 
 ;;;###autoload
-(defun psci (&optional directory)
+(defun psci (directory)
   "Run psci interpreter inside DIRECTORY."
   (interactive (psci-read-project-root))
-  (let ((default-directory (file-name-as-directory (expand-file-name (or directory default-directory)))))
-    (and psci-prepopulate-dotpsci (psci-write-dotpsci))
+  (with-psci-default-directory directory
+    (and psci-prepopulate-dotpsci (psci-write-dotpsci directory))
     (with-current-buffer (make-comint-in-buffer "psci" psci-buffer-name psci-executable)
       (psci-mode)
       (switch-to-buffer (current-buffer)))))
