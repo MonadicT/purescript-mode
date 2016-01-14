@@ -37,10 +37,23 @@
   (require 'let-alist))
 
 (require 'seq)
-(require 'psci)
 (require 'json)
 (require 'dash)
 (require 'flycheck)
+
+(defcustom flycheck-purescript-project-root-files
+  '(".psci"                             ; PureScript .psci file
+    ".psci_modules"                     ; PureScript .psci_modules directory
+    "bower.json"                        ; Bower project file
+    "package.json"                      ; npm package file
+    "gulpfile.js"                       ; Gulp build file
+    "Gruntfile.js"                      ; Grunt project file
+    "bower_components"                  ; Bower components directory
+    )
+  "List of files which be considered to locate the project root.
+The topmost match has precedence."
+  :type '(repeat string)
+  :group 'flycheck)
 
 (flycheck-def-option-var flycheck-purescript-project-root nil psc
   "Project root for PureScript syntax checker."
@@ -48,15 +61,51 @@
                  (directory :tag "Custom project root"))
   :risky t)
 
+(defun purescript-locate-base-directory (&optional directory)
+  "Locate a project root DIRECTORY for a purescript project."
+  (let ((directory (or directory default-directory)))
+    (cl-loop for file in flycheck-purescript-project-root-files
+             for project-root-dir = (locate-dominating-file directory file)
+             when project-root-dir
+             return project-root-dir)))
+
+(defun flycheck-purescript-project-root (&optional directory)
+  "Return a PuresScript project root from DIRECTORY."
+  (or flycheck-purescript-project-root (purescript-locate-base-directory directory)))
+
+(defun flycheck-purescript-read-bowerrc-directory (&optional directory)
+  "Read directories defined in DIRECTORY."
+  (let ((bowerrc (expand-file-name ".bowerrc" directory)))
+    (or (assoc-default 'directory (ignore-errors (json-read-file bowerrc))) "bower_components")))
+
+(defun flycheck-purescript-bower-directory-glob (&optional directory)
+  "Return a glob for PureScript bower sources in DIRECTORY."
+  (let ((bowerdir (flycheck-purescript-read-bowerrc-directory directory)))
+    (concat (file-name-as-directory bowerdir) "purescript-*/src/")))
+
+(defun flycheck-purescript-process-str (command &rest args)
+  "Execute COMMAND with ARGS, returning the first line of its output.
+
+If there is no output return nil."
+  (with-temp-buffer
+    (apply #'process-file command nil (list t nil) nil args)
+    (unless (bobp)
+      (goto-char (point-min))
+      (buffer-substring-no-properties (point) (line-end-position)))))
+
+(defun psci-read-bowerrc-directory (&optional directory)
+  "Read directories defined in DIRECTORY."
+  (let ((bowerrc (expand-file-name ".bowerrc" directory)))
+    (or (assoc-default 'directory (ignore-errors (json-read-file bowerrc))) "bower_components")))
+
 (defun flycheck-purescript-purs-flags (directory)
   "Calculate the PureScript psc command flags from DIRECTORY."
   (let* ((default-directory (file-name-as-directory (expand-file-name directory)))
-         (bower-purs (psci-bower-directory-purescript-glob)))
+         (bower-purs (flycheck-purescript-bower-directory-glob)))
     (list (expand-file-name "**/*.purs" bower-purs)
           (expand-file-name "src/**/*.purs")
           "--ffi" (expand-file-name "**/*.js" bower-purs)
           "--ffi" (expand-file-name "src/**/*.js"))))
-
 
 (defun flycheck-purescript-parse-json (output)
   "Read json errors from psc OUTPUT."
@@ -97,7 +146,9 @@
             (eval (and flycheck-purescript-project-root
                        (flycheck-purescript-purs-flags flycheck-purescript-project-root))))
   :error-parser flycheck-purescript-parse-errors
-  :predicate (lambda () flycheck-purescript-project-root)
+  :predicate (lambda ()
+               (and (string-prefix-p "0.8" (flycheck-purescript-process-str "psc" "--version"))
+                    flycheck-purescript-project-root))
   :modes purescript-mode)
 
 ;;;###autoload
@@ -107,7 +158,7 @@
 Add `psc' to `flycheck-checkers'."
   (interactive)
   (when (buffer-file-name)
-    (-when-let (root-dir (purescript-project-root))
+    (-when-let (root-dir (flycheck-purescript-project-root))
       (setq-local flycheck-purescript-project-root root-dir))))
 
 ;;;###autoload
