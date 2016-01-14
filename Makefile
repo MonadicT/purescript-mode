@@ -9,14 +9,18 @@ export EMACS
 
 PKGDIR := $(shell EMACS=$(EMACS) $(CASK) package-directory)
 
-SRCS   := $(shell $(CASK) files)
+SRCS   := \
+	purescript-mode.el \
+	purescript-font-lock.el
 OBJECTS = $(SRCS:.el=.elc)
+
+AUTOLOADS = purescript-mode-autoloads.el
 
 EMACSBATCH = $(EMACS) -Q --batch $(EMACSFLAGS)
 
 .PHONY: all build clean
 
-all: build
+all: build $(AUTOLOADS)
 
 build: $(OBJECTS)
 
@@ -25,6 +29,7 @@ package: $(PKGDIR)
 
 clean:
 	$(CASK) clean-elc
+	$(RM) $(AUTOLOADS) $(AUTOLOADS:.el=.elc)
 
 $(PKGDIR): Cask
 	$(CASK) install
@@ -32,6 +37,12 @@ $(PKGDIR): Cask
 
 %.elc: %.el $(PKGDIR)
 	$(CASK) exec $(EMACSBATCH) -L . -f batch-byte-compile $<
+
+$(AUTOLOADS): $(ELFILES) purescript-mode.elc
+	$(EMACSBATCH) \
+		--eval '(setq make-backup-files nil)' \
+		--eval '(setq generated-autoload-file "$(CURDIR)/$@")' \
+		-f batch-update-autoloads "."
 
 purescript-font-lock.el:
 	$(CURL) -L -o $@ "https://github.com/haskell/haskell-mode/raw/master/haskell-font-lock.el"

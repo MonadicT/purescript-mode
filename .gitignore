@@ -3,3 +3,4 @@
 .cask
 /dist/
 /node_modules/
+/purescript-mode-autoloads.el
