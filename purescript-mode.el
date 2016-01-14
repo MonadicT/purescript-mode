@@ -41,31 +41,6 @@
   :prefix "purescript-"
   :group 'languages)
 
-(defcustom purescript-project-root nil
-  "Path to the PureScript project root."
-  :type 'string
-  :safe #'file-directory-p
-  :group 'purescript)
-
-(defcustom purescript-node-executable "node"
-  "Executable of NodeJS."
-  :type 'string
-  :group 'purescript)
-
-(defcustom purescript-project-root-files
-  '(".psci"                             ; PureScript .psci file
-    ".psci_modules"                     ; PureScript .psci_modules directory
-    "bower.json"                        ; Bower project file
-    "package.json"                      ; npm package file
-    "gulpfile.js"                       ; Gulp build file
-    "Gruntfile.js"                      ; Grunt project file
-    "bower_components"                  ; Bower components directory
-    )
-  "List of files which be considered to locate the project root.
-The topmost match has precedence."
-  :type '(repeat string)
-  :group 'purescript)
-
 (defvar purescript-literate nil
   "Literate PureScript.
 
@@ -473,47 +448,6 @@ May return a qualified name."
     (setq electric-indent-inhibit t))
   (setq haskell-literate nil
         purescript-literate nil))
-
-
-(defun purescript-locate-base-directory (&optional directory throw-error)
-  "Locate a project root DIRECTORY for a purescript project.
-
-If THROW-ERROR is non-nil throws an signal error if project root
-couldn't be found."
-  (let ((directory (or directory default-directory)))
-    (cl-loop for file in purescript-project-root-files
-             for project-root-dir = (locate-dominating-file directory file)
-             when project-root-dir
-             return project-root-dir
-             finally (and throw-error (error "Project root not found")))))
-
-(defun purescript-project-root (&optional directory)
-  "Return a PuresScript project root from DIRECTORY."
-  (or purescript-project-root (purescript-locate-base-directory directory)))
-
-(defun purescript-project-root-or-error (&optional directory)
-  "Return a PuresScript project root from DIRECTORY."
-  (or (purescript-project-root directory) (error "Project root not found")))
-
-(defvar purescript-module-history nil)
-
-;; XXX: For debugging purposes, don't rely much on this.
-;;;###autoload
-(defun purescript-locate-compiled-file (module)
-  "Find the compiled file of a PureScript MODULE."
-  (interactive (list (read-string "Module: " (purescript-find-module-name) 'purescript-module-history)))
-  (let* ((root-dir (purescript-project-root-or-error))
-         (node-path (expand-file-name (format ".psci_modules/node_modules") root-dir))
-         (process-environment (append (list (format "NODE_PATH=%s" node-path))
-                                      process-environment)))
-    (find-file-other-window (car (process-lines purescript-node-executable "-e" (format "process.stdout.write(require.resolve('%s'))" module))))))
-
-(defun purescript-find-module-name ()
-  "Find PureScript module name from the current buffer."
-  (save-excursion
-    (goto-char (point-min))
-    (and (re-search-forward"^module[ \t]+\\(\\(?:\\sw\\|[.]\\)+\\)" nil t)
-         (match-string-no-properties 1))))
 
 
 ;;; Pursuit

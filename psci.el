@@ -35,7 +35,6 @@
 (require 'json)
 (require 'comint)
 (require 'em-glob)
-(require 'purescript-mode)
 
 (defgroup psci nil
   "Settings for REPL interaction via `inferior-purescript-mode'"
@@ -44,6 +43,11 @@
 
 (defcustom psci-executable "psci"
   "The name of the command to start the inferior psci."
+  :type 'string
+  :group 'psci)
+
+(defcustom psci-node-executable "node"
+  "Executable of NodeJS."
   :type 'string
   :group 'psci)
 
@@ -64,8 +68,30 @@
   :safe #'booleanp
   :group 'psci)
 
+(defcustom psci-project-root nil
+  "Path to the PureScript project root."
+  :type 'string
+  :safe #'file-directory-p
+  :group 'psci)
+
+(defcustom psci-project-root-files
+  '(".psci"                             ; PureScript .psci file
+    ".psci_modules"                     ; PureScript .psci_modules directory
+    "bower.json"                        ; Bower project file
+    "package.json"                      ; npm package file
+    "gulpfile.js"                       ; Gulp build file
+    "Gruntfile.js"                      ; Grunt project file
+    "bower_components"                  ; Bower components directory
+    )
+  "List of files which be considered to locate the project root.
+The topmost match has precedence."
+  :type '(repeat string)
+  :group 'psci)
+
 (defconst psci-dotpsci-file-name ".psci"
   "Psci script file name.")
+
+(defvar psci-module-history nil)
 
 (defmacro with-psci-default-directory (directory &rest body)
   "Macro to change `default-directory' to DIRECTORY and execute BODY."
@@ -75,6 +101,31 @@
                                 default-directory)))
      ,@body))
 
+(defun psci-locate-base-directory (&optional directory)
+  "Locate a project root DIRECTORY for a purescript project."
+  (let ((directory (or directory default-directory)))
+    (cl-loop for file in psci-project-root-files
+             for project-root-dir = (locate-dominating-file directory file)
+             when project-root-dir
+             return project-root-dir)))
+
+(defun psci-project-root (&optional directory)
+  "Return a PuresScript project root from DIRECTORY."
+  (or psci-project-root (psci-locate-base-directory directory)))
+
+(defun psci-find-module-name ()
+  "Find PureScript module name from the current buffer."
+  (save-excursion
+    (goto-char (point-min))
+    (and (re-search-forward"^module[ \t]+\\(\\(?:\\sw\\|[.]\\)+\\)" nil t)
+         (match-string-no-properties 1))))
+
+(defvar psci-compilation-regex-alist
+  `((,(rx line-start (* space) (? "Error ") "at " (group (minimal-match (one-or-more not-newline)))
+          " line " (group (+ num)) ", column " (group (+ num)) " - line " (group (+ num)) ", column " (group (+ num)) (? ":"))
+     1 (2 . 3) (4 . 5) (6 . nil)))
+  "Psci `compilation-error-regexp-alist'.")
+
 (define-derived-mode psci-mode comint-mode "Psci"
   "Major mode for interacting with an inferior PureScript process."
   :group 'psci
@@ -82,7 +133,7 @@
        psci-prompt-regexp)
   (set (make-local-variable 'comint-prompt-read-only) t)
   (set (make-local-variable 'compilation-error-regexp-alist)
-       purescript-mode-compilation-regex-alist)
+       psci-compilation-regex-alist)
   (compilation-shell-minor-mode 1))
 
 
@@ -127,7 +178,7 @@
 
 (defun psci-read-project-root ()
   "Read PureScript project root."
-  (let ((project-root (purescript-project-root)))
+  (let ((project-root (psci-project-root)))
     (list (or (and (not current-prefix-arg) project-root)
               (read-directory-name "Project root: " project-root)))))
 
@@ -156,6 +207,17 @@ Based on `eshell-extended-glob'"
     (when (or (not (string-match "\n\\'" string))
               (string-match "\n[ \t].*\n?\\'" string))
       (comint-send-string process "\n"))))
+
+;; XXX: For debugging purposes, don't rely much on this.
+;;;###autoload
+(defun psci-locate-compiled-file (module)
+  "Find the compiled file of a PureScript MODULE."
+  (interactive (list (read-string "Module: " (psci-find-module-name) 'psci-module-history)))
+  (let* ((root-dir (or (psci-project-root) (error "Project root not found")))
+         (node-path (expand-file-name (format ".psci_modules/node_modules") root-dir))
+         (process-environment (append (list (format "NODE_PATH=%s" node-path))
+                                      process-environment)))
+    (find-file-other-window (car (process-lines psci-node-executable "-e" (format "process.stdout.write(require.resolve('%s'))" module))))))
 
 (defun psci-get-process-or-error ()
   "Return psci process or error."
