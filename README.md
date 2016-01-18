@@ -27,33 +27,28 @@ Install packages:
 (use-package psci                       ; psci integration
   :ensure t
   :pin emacs-pe)
-
-(use-package flycheck-purescript        ; Setup Flycheck by PureScript projects
-  :ensure t
-  :pin emacs-pe
-  :init (add-hook 'purescript-mode-hook #'flycheck-purescript-setup))
 ```
 
 ### From git repository
 
-1. Clone repository
++ Clone the repository:
 
-``` bash
-git clone https://github.com/emacs-pe/purescript-mode.git
-```
+    ``` bash
+    git clone https://github.com/emacs-pe/purescript-mode.git
+    ```
 
-2. Change directory to the cloned repository and create package autoloads:
++ Change directory to the cloned repository and create package autoloads:
 
-``` bash
-make
-```
+    ``` bash
+    make
+    ```
 
-2. Add the following to your `init.el`:
++ Add the following to your `init.el`:
 
-``` el
-(add-to-list 'load-path "/path/to/cloned/purescript-mode/")
-(require 'purescript-mode-autoloads)
-```
+    ``` elisp
+    (add-to-list 'load-path "/path/to/cloned/purescript-mode/")
+    (require 'purescript-mode-autoloads)
+    ```
 
 ## Usage:
 
